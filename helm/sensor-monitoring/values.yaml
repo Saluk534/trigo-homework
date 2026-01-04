@@ -1,0 +1,80 @@
+# Default values for sensor-monitoring
+
+# Inventory Server configuration
+inventoryServer:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: inventory-server
+    pullPolicy: IfNotPresent
+    tag: "latest"
+  service:
+    type: ClusterIP
+    port: 1337
+  resources:
+    limits:
+      cpu: 200m
+      memory: 128Mi
+    requests:
+      cpu: 100m
+      memory: 64Mi
+
+# Service Discovery configuration
+serviceDiscovery:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: service-discovery
+    pullPolicy: IfNotPresent
+    tag: "latest"
+  config:
+    inventoryUrl: "http://sensor-monitoring-inventory:1337/inventory"
+    updateInterval: 30
+    metricsPort: 9100
+    metricsPath: "/metrics"
+  resources:
+    limits:
+      cpu: 200m
+      memory: 128Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
+
+# Prometheus configuration
+prometheus:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: prom/prometheus
+    pullPolicy: IfNotPresent
+    tag: "latest"
+  service:
+    type: NodePort
+    port: 9090
+    nodePort: 30090
+  retention:
+    time: 30d
+    size: 10GB
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+    requests:
+      cpu: 500m
+      memory: 1Gi
+  storage:
+    enabled: true
+    storageClass: ""
+    size: 20Gi
+
+# Global settings
+global:
+  storageClass: ""
+  
+# Persistence for targets file
+persistence:
+  enabled: true
+  storageClass: ""
+  accessMode: ReadWriteMany
+  size: 1Gi
+

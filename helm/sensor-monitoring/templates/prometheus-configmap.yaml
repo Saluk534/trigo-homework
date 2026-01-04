@@ -1,0 +1,46 @@
+{{- if .Values.prometheus.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "sensor-monitoring.fullname" . }}-prometheus-config
+  labels:
+    {{- include "sensor-monitoring.labels" . | nindent 4 }}
+    app.kubernetes.io/component: prometheus
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+      external_labels:
+        cluster: 'trigo-sensors'
+        environment: 'production'
+
+    scrape_configs:
+      - job_name: 'prometheus'
+        static_configs:
+          - targets: ['localhost:9090']
+            labels:
+              instance: 'prometheus-server'
+
+      - job_name: 'inventory_service'
+        static_configs:
+          - targets: ['{{ include "sensor-monitoring.fullname" . }}-inventory:1337']
+            labels:
+              service: 'inventory'
+
+      - job_name: 'sensors'
+        file_sd_configs:
+          - files:
+              - '/etc/prometheus/targets/*.json'
+            refresh_interval: 30s
+        scrape_interval: 30s
+        scrape_timeout: 10s
+        relabel_configs:
+          - source_labels: [__address__]
+            target_label: __param_target
+          - source_labels: [__address__]
+            regex: '(sensor_[0-9]+):.*'
+            target_label: sensor_id
+            replacement: '$1'
+{{- end }}
+

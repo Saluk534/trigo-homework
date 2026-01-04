@@ -1,41 +1,82 @@
-x-defaults: &default-settings
-  restart: unless-stopped       
-  mem_limit: 256m               
-  cpus: 0.25                      
-  networks:
-    - trigo-net
+version: '3.8'
 
 services:
+  # Inventory Service - Provides list of active sensors
+  inventory_server:
+    build:
+      context: ./inventory_server
+      dockerfile: Dockerfile
+    container_name: inventory_server
+    ports:
+      - "1337:1337"
+    networks:
+      - monitoring
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:1337/inventory')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # Service Discovery - Queries inventory and updates Prometheus targets
+  service_discovery:
+    build:
+      context: ./service_discovery
+      dockerfile: Dockerfile
+    container_name: service_discovery
+    environment:
+      - INVENTORY_URL=http://inventory_server:1337/inventory
+      - UPDATE_INTERVAL=30
+      - TARGETS_FILE=/shared/targets.json
+      - METRICS_PORT=9100
+      - METRICS_PATH=/metrics
+    volumes:
+      - prometheus_targets:/shared
+    networks:
+      - monitoring
+    depends_on:
+      inventory_server:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Prometheus - Time series database and monitoring system
   prometheus:
-    <<: *default-settings
     image: prom/prometheus:latest
+    container_name: prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--storage.tsdb.retention.time=30d'
     ports:
       - "9090:9090"
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
-      - ./targets.json:/etc/prometheus/targets.json
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_targets:/etc/prometheus/targets:ro
+      - prometheus_data:/prometheus
+    networks:
+      - monitoring
     depends_on:
-      - target_updater
-
-  target_updater:
-    <<: *default-settings
-    image: python:3.12-alpine
-    volumes:
-      - ./update_targets.py:/etc/prometheus/update_targets.py
-      - ./targets.json:/etc/prometheus/targets.json
-    depends_on:
-      - inventory
-    command: >
-      sh -c "pip install requests &&
-             python /etc/prometheus/update_targets.py"
-
-  inventory:
-    build: ./inventory_server
-    <<: *default-settings
-
+      - service_discovery
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
 
 networks:
-  trigo-net:
+  monitoring:
     driver: bridge
+    name: trigo-monitoring
+
+volumes:
+  prometheus_data:
+    name: prometheus_data
+  prometheus_targets:
+    name: prometheus_targets
+

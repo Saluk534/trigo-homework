@@ -1,0 +1,16 @@
+apiVersion: v2
+name: sensor-monitoring
+description: Prometheus-based monitoring for Trigo sensors with custom service discovery
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - prometheus
+  - monitoring
+  - service-discovery
+  - sensors
+home: https://github.com/trigo/sensor-monitoring
+maintainers:
+  - name: DevOps Team
+    email: devops@trigo.com
+

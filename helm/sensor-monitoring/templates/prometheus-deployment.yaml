@@ -1,0 +1,74 @@
+{{- if .Values.prometheus.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sensor-monitoring.fullname" . }}-prometheus
+  labels:
+    {{- include "sensor-monitoring.labels" . | nindent 4 }}
+    app.kubernetes.io/component: prometheus
+spec:
+  replicas: {{ .Values.prometheus.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "sensor-monitoring.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: prometheus
+  template:
+    metadata:
+      labels:
+        {{- include "sensor-monitoring.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: prometheus
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/prometheus-configmap.yaml") . | sha256sum }}
+    spec:
+      containers:
+      - name: prometheus
+        image: "{{ .Values.prometheus.image.repository }}:{{ .Values.prometheus.image.tag }}"
+        imagePullPolicy: {{ .Values.prometheus.image.pullPolicy }}
+        args:
+        - '--config.file=/etc/prometheus/prometheus.yml'
+        - '--storage.tsdb.path=/prometheus'
+        - '--web.enable-lifecycle'
+        - '--storage.tsdb.retention.time={{ .Values.prometheus.retention.time }}'
+        - '--storage.tsdb.retention.size={{ .Values.prometheus.retention.size }}'
+        ports:
+        - name: http
+          containerPort: 9090
+          protocol: TCP
+        volumeMounts:
+        - name: config
+          mountPath: /etc/prometheus
+        - name: targets
+          mountPath: /etc/prometheus/targets
+          readOnly: true
+        - name: data
+          mountPath: /prometheus
+        livenessProbe:
+          httpGet:
+            path: /-/healthy
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /-/ready
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          {{- toYaml .Values.prometheus.resources | nindent 10 }}
+      volumes:
+      - name: config
+        configMap:
+          name: {{ include "sensor-monitoring.fullname" . }}-prometheus-config
+      - name: targets
+        persistentVolumeClaim:
+          claimName: {{ include "sensor-monitoring.fullname" . }}-targets
+      - name: data
+        {{- if .Values.prometheus.storage.enabled }}
+        persistentVolumeClaim:
+          claimName: {{ include "sensor-monitoring.fullname" . }}-prometheus-data
+        {{- else }}
+        emptyDir: {}
+        {{- end }}
+{{- end }}
+

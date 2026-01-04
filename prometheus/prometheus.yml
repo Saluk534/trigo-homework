@@ -1,0 +1,59 @@
+# Prometheus Configuration with File-Based Service Discovery
+global:
+  scrape_interval: 15s      # Set the scrape interval to every 15 seconds
+  evaluation_interval: 15s  # Evaluate rules every 15 seconds
+  external_labels:
+    cluster: 'trigo-sensors'
+    environment: 'production'
+
+# Alertmanager configuration (optional, can be added later)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+          # - alertmanager:9093
+
+# Load rules once and periodically evaluate them
+rule_files:
+  # - "alerts/*.yml"
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          instance: 'prometheus-server'
+
+  # Inventory service monitoring
+  - job_name: 'inventory_service'
+    static_configs:
+      - targets: ['inventory_server:1337']
+        labels:
+          service: 'inventory'
+
+  # Dynamic sensor targets using file-based service discovery
+  - job_name: 'sensors'
+    # File-based service discovery - Prometheus watches this file for changes
+    file_sd_configs:
+      - files:
+          - '/etc/prometheus/targets/*.json'
+        refresh_interval: 30s  # How often Prometheus checks for file changes
+    
+    # Scrape configuration for sensors
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    
+    # Relabeling rules for sensors
+    relabel_configs:
+      # Keep the original instance label
+      - source_labels: [__address__]
+        target_label: __param_target
+      
+      # Add sensor labels based on instance name
+      - source_labels: [__address__]
+        regex: '(sensor_[0-9]+):.*'
+        target_label: sensor_id
+        replacement: '$1'
+

@@ -1,0 +1,20 @@
+{{- if .Values.inventoryServer.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "sensor-monitoring.fullname" . }}-inventory
+  labels:
+    {{- include "sensor-monitoring.labels" . | nindent 4 }}
+    app.kubernetes.io/component: inventory
+spec:
+  type: {{ .Values.inventoryServer.service.type }}
+  ports:
+  - port: {{ .Values.inventoryServer.service.port }}
+    targetPort: http
+    protocol: TCP
+    name: http
+  selector:
+    {{- include "sensor-monitoring.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: inventory
+{{- end }}
+
