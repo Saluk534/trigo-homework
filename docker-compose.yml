@@ -1,0 +1,41 @@
+x-defaults: &default-settings
+  restart: unless-stopped       
+  mem_limit: 256m               
+  cpus: 0.25                      
+  networks:
+    - trigo-net
+
+services:
+  prometheus:
+    <<: *default-settings
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./targets.json:/etc/prometheus/targets.json
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    depends_on:
+      - target_updater
+
+  target_updater:
+    <<: *default-settings
+    image: python:3.12-alpine
+    volumes:
+      - ./update_targets.py:/etc/prometheus/update_targets.py
+      - ./targets.json:/etc/prometheus/targets.json
+    depends_on:
+      - inventory
+    command: >
+      sh -c "pip install requests &&
+             python /etc/prometheus/update_targets.py"
+
+  inventory:
+    build: ./inventory_server
+    <<: *default-settings
+
+
+networks:
+  trigo-net:
+    driver: bridge
